@@ -1,5 +1,6 @@
 struct stat;
 struct rtcdate;
+struct pstat;
 
 // system calls
 int fork(void);
@@ -20,6 +21,7 @@ int mkdir(const char*);
 int chdir(const char*);
 int dup(int);
 int getpid(void);
+int getpinfo(struct pstat*);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);

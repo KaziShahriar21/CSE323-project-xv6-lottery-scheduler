@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "x86.h"
 #include "proc.h"
+#include "pstat.h"
 #include "spinlock.h"
 
 struct {
@@ -88,7 +89,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-
+  p->tickets = 1;               // default: every process starts with 1 ticket
+  p->ticks = 0;
+  
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -309,6 +312,29 @@ wait(void)
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
+}
+
+// Fill in pstat with info about every slot in the process table.
+// Returns -1 on a bad pointer, 0 on success.
+int
+getpinfo(struct pstat *ps)
+{
+  struct proc *p;
+  int i = 0;
+
+  if(ps == 0)
+    return -1;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    ps->inuse[i]   = (p->state != UNUSED);
+    ps->tickets[i] = p->tickets;
+    ps->pid[i]     = p->pid;
+    ps->ticks[i]   = p->ticks;
+    i++;
+  }
+  release(&ptable.lock);
+  return 0;
 }
 
 //PAGEBREAK: 42

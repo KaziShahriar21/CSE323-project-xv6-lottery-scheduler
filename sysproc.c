@@ -1,3 +1,4 @@
+#include "pstat.h"
 #include "types.h"
 #include "x86.h"
 #include "defs.h"
@@ -40,6 +41,16 @@ int
 sys_getpid(void)
 {
   return myproc()->pid;
+}
+
+int
+sys_getpinfo(void)
+{
+  struct pstat *ps;
+
+  if(argptr(0, (void*)&ps, sizeof(*ps)) < 0)
+    return -1;
+  return getpinfo(ps);
 }
 
 int
