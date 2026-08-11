@@ -1,4 +1,4 @@
-// ps.c -- validates getpinfo() / pstat by dumping the process table
+// ps.c -- validates getpinfo() / pstat by dumping extended process info
 #include "types.h"
 #include "stat.h"
 #include "user.h"
@@ -15,10 +15,13 @@ main(int argc, char *argv[])
     exit();
   }
 
-  printf(1, "PID\tTICKETS\tTICKS\n");
+  printf(1, "PID\tPPID\tTICKETS\tTICKS\tNSCHED\tBURST\tCHILDREN\tMEM\n");
   for(i = 0; i < NPROC; i++){
     if(ps.inuse[i]){
-      printf(1, "%d\t%d\t%d\n", ps.pid[i], ps.tickets[i], ps.ticks[i]);
+      printf(1, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+             ps.pid[i], ps.ppid[i], ps.tickets[i], ps.ticks[i],
+             ps.nschedule[i], ps.lastburst[i], ps.nchildren[i],
+             ps.memsize[i]);
     }
   }
 

@@ -91,7 +91,9 @@ found:
   p->pid = nextpid++;
   p->tickets = 1;               // default: every process starts with 1 ticket
   p->ticks = 0;
-  
+  p->nschedule = 0;
+  p->burst_start = 0;
+  p->last_burst = 0;
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -319,8 +321,9 @@ wait(void)
 int
 getpinfo(struct pstat *ps)
 {
-  struct proc *p;
+  struct proc *p, *q;
   int i = 0;
+  int nchild;
 
   if(ps == 0)
     return -1;
@@ -331,6 +334,19 @@ getpinfo(struct pstat *ps)
     ps->tickets[i] = p->tickets;
     ps->pid[i]     = p->pid;
     ps->ticks[i]   = p->ticks;
+    ps->ppid[i]      = p->parent ? p->parent->pid : 0;
+    ps->memsize[i]   = p->sz;
+    ps->nschedule[i] = p->nschedule;
+    ps->lastburst[i] = p->last_burst;
+
+    // Count how many other processes have p as their parent.
+    nchild = 0;
+    for(q = ptable.proc; q < &ptable.proc[NPROC]; q++){
+      if(q->state != UNUSED && q->parent == p)
+        nchild++;
+    }
+    ps->nchildren[i] = nchild;
+
     i++;
   }
   release(&ptable.lock);
@@ -369,8 +385,15 @@ scheduler(void)
       switchuvm(p);
       p->state = RUNNING;
 
+      p->nschedule++;           // this process is being given the CPU one more time
+      p->burst_start = ticks;   // remember when this burst began
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
+
+      // Process is done running for now (it yielded, blocked, or was
+      // preempted). Record how long that burst lasted.
+      p->last_burst = ticks - p->burst_start;
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.

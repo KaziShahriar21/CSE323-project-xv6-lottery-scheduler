@@ -51,6 +51,9 @@ struct proc {
   char name[16];               // Process name (debugging)
   int tickets;                 // number of lottery tickets held
   int ticks;                   // number of timer ticks this process has run for
+  int nschedule;                // number of times this process has been picked to run (CPU accesses)
+  int burst_start;              // tick at which the current/most recent run began
+  int last_burst;               // length (in ticks) of the most recently completed CPU burst
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -100,6 +100,10 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
 
+  // Count this tick against whichever process was actually running.
+  if(myproc() && myproc()->state == RUNNING)
+    myproc()->ticks++;
+
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
   if(myproc() && myproc()->state == RUNNING &&
