@@ -54,6 +54,33 @@ sys_getpinfo(void)
 }
 
 int
+sys_settickets(void)
+{
+  int n;
+  if(argint(0, &n) < 0)
+    return -1;
+  return settickets(n);
+}
+
+int
+sys_transfertickets(void)
+{
+  int pid, n;
+  if(argint(0, &pid) < 0 || argint(1, &n) < 0)
+    return -1;
+  return transfertickets(pid, n);
+}
+
+int
+sys_exchangetickets(void)
+{
+  int pid;
+  if(argint(0, &pid) < 0)
+    return -1;
+  return exchangetickets(pid);
+}
+
+int
 sys_sbrk(void)
 {
   int addr;

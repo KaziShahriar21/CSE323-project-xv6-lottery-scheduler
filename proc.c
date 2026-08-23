@@ -19,6 +19,21 @@ int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
+extern uint ticks;   // global tick counter, defined in trap.c — used here as entropy
+
+// A minimal linear congruential generator (LCG). The xv6 kernel has no
+// standard library rand(), so we implement the simplest workable one
+// ourselves. Reseeded with the live tick counter each call so the
+// sequence isn't identical across boots.
+static unsigned int lottery_seed = 2463534242u;
+
+static unsigned int
+lottery_rand(void)
+{
+  lottery_seed = lottery_seed * 1103515245u + 12345u + ticks;
+  return (lottery_seed >> 16) & 0x7fffffff;
+}
+
 static void wakeup1(void *chan);
 
 void
@@ -203,6 +218,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->tickets = curproc->tickets;   // child inherits parent's ticket count
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -353,6 +369,64 @@ getpinfo(struct pstat *ps)
   return 0;
 }
 
+// Set the calling process's ticket count.
+// Returns 0 on success, -1 if number < 1.
+int
+settickets(int number)
+{
+  if(number < 1)
+    return -1;
+  myproc()->tickets = number;
+  return 0;
+}
+
+// Move n tickets from the calling process to pid.
+// Fails (-1) if n <= 0, if it would drop the caller below 1 ticket,
+// or if pid does not name a live process.
+int
+transfertickets(int pid, int n)
+{
+  struct proc *p;
+  struct proc *cp = myproc();
+
+  if(n <= 0 || cp->tickets - n < 1)
+    return -1;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->state != UNUSED && p->state != ZOMBIE){
+      p->tickets += n;
+      cp->tickets -= n;
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
+// Swap the calling process's ticket balance with pid's.
+int
+exchangetickets(int pid)
+{
+  struct proc *p;
+  struct proc *cp = myproc();
+  int tmp;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->state != UNUSED && p->state != ZOMBIE){
+      tmp = cp->tickets;
+      cp->tickets = p->tickets;
+      p->tickets = tmp;
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -364,43 +438,64 @@ getpinfo(struct pstat *ps)
 void
 scheduler(void)
 {
-  struct proc *p;
+  struct proc *p, *chosen;
   struct cpu *c = mycpu();
+  int total_tickets, winner, counter;
   c->proc = 0;
-  
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+
+    // 1. Total up tickets across every RUNNABLE process.
+    total_tickets = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+      if(p->state == RUNNABLE)
+        total_tickets += p->tickets;
+
+    if(total_tickets <= 0){
+      // Nobody runnable right now — nothing to schedule this pass.
+      release(&ptable.lock);
+      continue;
+    }
+
+    // 2. Draw the winning ticket, in [0, total_tickets).
+    winner = (int)(lottery_rand() % total_tickets);
+
+    // 3. Walk the table again, accumulating tickets, until the running
+    //    sum passes the winning draw — that process holds the winning ticket.
+    counter = 0;
+    chosen = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+      counter += p->tickets;
+      if(counter > winner){
+        chosen = p;
+        break;
+      }
+    }
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
+    // 4. Run the winner for one time slice, exactly as round-robin did.
+    if(chosen){
+      p = chosen;
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
       p->nschedule++;           // this process is being given the CPU one more time
       p->burst_start = ticks;   // remember when this burst began
-
       swtch(&(c->scheduler), p->context);
       switchkvm();
-
       // Process is done running for now (it yielded, blocked, or was
       // preempted). Record how long that burst lasted.
       p->last_burst = ticks - p->burst_start;
-
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+    release(&ptable.lock);
   }
 }
 
