@@ -5,8 +5,8 @@ A lottery-based CPU scheduler for xv6, implemented as a course project
 for CSE323.
 
 ## Group members
-- Sajedul Abedin
-- Sadid Chowdhury
+- Sajidul Abedin
+- Saif Mahmood Chowdhury
 - Kazi Shahriar Sharif
 
 ## Project overview
@@ -18,10 +18,17 @@ proportionally larger share of the CPU.
 
 ## Status
 - [x] Phase 1 — Process introspection: `pstat.h` / `getpinfo()` syscall,
-      validated with the `ps` user program.
-- [ ] Phase 2 — Lottery scheduler: `settickets()`, ticket inheritance on
-      `fork()`, randomized proportional scheduling, plus ticket transfer
-      and ticket exchange between processes.
+      extended with CPU burst length, total CPU time, memory size,
+      parent PID, and child count. Validated with `ps` and a dedicated
+      edge-case harness (`validate.c`).
+- [x] Phase 2 — Lottery scheduler: `settickets()`, ticket inheritance on
+      `fork()`, randomized proportional scheduling, ticket transfer, and
+      ticket exchange. Validated with `lottotest.c` (3:2:1 ratio,
+      converges to within ~3% of the theoretical split, with a
+      human-readable bar-chart summary printed after every run),
+      `transfertest.c`, `exchangetest.c`, and a 16/16-passing edge-case
+      suite (`edgetest.c`) covering invalid input, nonexistent PIDs, and
+      exact ticket-count boundaries.
 
 ## Build & run
     make
@@ -29,13 +36,23 @@ proportionally larger share of the CPU.
 
 Exit QEMU with Ctrl-a then x.
 
+## Validation programs
+| Program | What it checks |
+|---|---|
+| `ps` | Prints live process stats via `getpinfo()` |
+| `validate` | NULL-pointer safety, `nchildren`, CPU-time tracking, memory growth via `sbrk` |
+| `lottotest` | 3:2:1 ticket ratio converges correctly over time; prints CSV + ASCII bar summary |
+| `transfertest` | `transfertickets()` moves the exact requested amount |
+| `exchangetest` | `exchangetickets()` performs a full swap |
+| `edgetest` | Invalid input, nonexistent PIDs, and exact ticket-count boundaries for every syscall |
+
 ## New syscalls
 | Syscall | Purpose |
 |---|---|
-| `getpinfo(struct pstat*)` | Returns PID, ticket count, and ticks run for every process |
-| `settickets(int)` | Sets the calling process's ticket count |
-| `transfertickets(int pid, int n)` *(Phase 2)* | Transfers n tickets from caller to pid |
-| `exchangetickets(int pid)` *(Phase 2)* | Swaps ticket counts between caller and pid |
+| `getpinfo(struct pstat*)` | Returns PID, PPID, ticket count, ticks, CPU-access count, last burst length, child count, and memory size for every process |
+| `settickets(int)` | Sets the calling process's ticket count (fails on input < 1) |
+| `transfertickets(int pid, int n)` | Transfers n tickets from caller to pid (fails if it would drop the caller below 1 ticket, or pid doesn't exist) |
+| `exchangetickets(int pid)` | Swaps ticket counts between caller and pid |
 
 ---
 
