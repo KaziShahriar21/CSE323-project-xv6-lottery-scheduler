@@ -168,6 +168,7 @@ mkfs: mkfs.c fs.h
 UPROGS=\
 	_cat\
 	_echo\
+        _edgetest\
         _exchangetest\
 	_forktest\
 	_grep\
