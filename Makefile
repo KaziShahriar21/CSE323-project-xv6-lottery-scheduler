@@ -170,6 +170,7 @@ UPROGS=\
 	_echo\
         _edgetest\
         _exchangetest\
+        _pcexchangetest\
 	_forktest\
 	_grep\
 	_init\
@@ -177,6 +178,7 @@ UPROGS=\
 	_ln\
 	_ls\
 	_mkdir\
+        _pstree\
 	_ps\
         _validate\
         _lottotest\

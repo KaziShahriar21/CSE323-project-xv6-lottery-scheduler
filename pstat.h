@@ -13,6 +13,13 @@ struct pstat {
   uint memsize[NPROC]; // memory size of each process, in bytes
   int nschedule[NPROC];// how many times each process has been picked to run
   int lastburst[NPROC];// length (in ticks) of each process's most recent CPU burst
+  int nexchange[NPROC];// number of times each process has taken part in a ticket exchange
+  int pcexchange[NPROC];// number of those exchanges that were specifically with a parent or child
+  int last_pc_partner[NPROC];// pid of the most recent parent-child exchange partner (-1 if never)
+  int last_pc_before[NPROC]; // this process's own ticket count immediately before that exchange
+  int last_pc_after[NPROC];  // this process's own ticket count immediately after that exchange
+
+
 };
 
 #endif // _PSTAT_H_

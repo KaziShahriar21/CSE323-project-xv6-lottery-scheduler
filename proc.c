@@ -35,6 +35,8 @@ lottery_rand(void)
 }
 
 static void wakeup1(void *chan);
+static int is_parent_child(struct proc *a, struct proc *b);
+static void log_exchange(struct proc *cp, struct proc *p, int cp_before, int p_before, int is_pc);
 
 void
 pinit(void)
@@ -108,6 +110,11 @@ found:
   p->ticks = 0;
   p->nschedule = 0;
   p->burst_start = 0;
+  p->nexchange = 0;
+  p->pcexchange = 0;
+  p->last_pc_partner = -1;
+  p->last_pc_before = 0;
+  p->last_pc_after = 0;
   p->last_burst = 0;
   release(&ptable.lock);
 
@@ -354,6 +361,11 @@ getpinfo(struct pstat *ps)
     ps->memsize[i]   = p->sz;
     ps->nschedule[i] = p->nschedule;
     ps->lastburst[i] = p->last_burst;
+    ps->nexchange[i] = p->nexchange;
+    ps->pcexchange[i] = p->pcexchange;
+    ps->last_pc_partner[i] = p->last_pc_partner;
+    ps->last_pc_before[i] = p->last_pc_before;
+    ps->last_pc_after[i] = p->last_pc_after;
 
     // Count how many other processes have p as their parent.
     nchild = 0;
@@ -405,25 +417,69 @@ transfertickets(int pid, int n)
   return -1;
 }
 
+// Returns nonzero if a and b are in a direct parent-child relationship
+// (in either direction). Used to decide whether an exchange counts
+// toward pcexchange. Pure function: no locks, no side effects.
+static int
+is_parent_child(struct proc *a, struct proc *b)
+{
+  return (a->parent == b) || (b->parent == a);
+}
+
+// Prints a single log line describing one ticket exchange. Pure
+// presentation logic: takes the before-values as arguments (the
+// after-values are read directly off cp/p, since the swap has already
+// happened by the time this is called). Kept separate from
+// exchangetickets() so the exchange logic and its display format can
+// each change independently.
+static void
+log_exchange(struct proc *cp, struct proc *p, int cp_before, int p_before, int is_pc)
+{
+  if(is_pc){
+    cprintf("parent-child exchange #%d: pid %d (%d->%d tickets) <-> pid %d (%d->%d tickets)\n",
+            cp->pcexchange, cp->pid, cp_before, cp->tickets, p->pid, p_before, p->tickets);
+  } else {
+    cprintf("exchange: pid %d (%d->%d tickets) <-> pid %d (%d->%d tickets)\n",
+            cp->pid, cp_before, cp->tickets, p->pid, p_before, p->tickets);
+  }
+}
+
 // Swap the calling process's ticket balance with pid's.
+
 int
 exchangetickets(int pid)
 {
   struct proc *p;
   struct proc *cp = myproc();
-  int tmp;
-
+  int tmp, cp_before, p_before;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid && p->state != UNUSED && p->state != ZOMBIE){
+      cp_before = cp->tickets;
+      p_before  = p->tickets;
       tmp = cp->tickets;
       cp->tickets = p->tickets;
       p->tickets = tmp;
+      cp->nexchange++;
+      p->nexchange++;
+      int is_pc = is_parent_child(cp, p);
+      if(is_pc){
+        cp->pcexchange++;
+        p->pcexchange++;
+        cp->last_pc_partner = p->pid;
+        cp->last_pc_before = cp_before;
+        cp->last_pc_after = cp->tickets;
+        p->last_pc_partner = cp->pid;
+        p->last_pc_before = p_before;
+        p->last_pc_after = p->tickets;
+
+      }
+      log_exchange(cp, p, cp_before, p_before, is_pc);
       release(&ptable.lock);
       return 0;
     }
   }
-  release(&ptable.lock);
+release(&ptable.lock);
   return -1;
 }
 

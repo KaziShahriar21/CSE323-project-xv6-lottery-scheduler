@@ -54,6 +54,12 @@ struct proc {
   int nschedule;                // number of times this process has been picked to run (CPU accesses)
   int burst_start;              // tick at which the current/most recent run began
   int last_burst;               // length (in ticks) of the most recently completed CPU burst
+  int nexchange;                 // number of times this process has taken part in a ticket exchange
+  int pcexchange;                // number of those exchanges that were specifically with a parent or child
+  int last_pc_partner;           // pid of the most recent parent-child exchange partner (-1 if never)
+  int last_pc_before;            // this process's own ticket count immediately before that exchange
+  int last_pc_after;             // this process's own ticket count immediately after that exchange
+
 };
 
 // Process memory is laid out contiguously, low addresses first:
